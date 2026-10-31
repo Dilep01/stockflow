@@ -1,0 +1,7 @@
+global:
+  scrape_interval: 15s
+scrape_configs:
+  - job_name: stockflow
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['backend:8080', 'identity:8080', 'catalog:8080', 'inventory:8080', 'orders:8080', 'fulfillment:8080', 'notification:8080']

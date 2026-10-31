@@ -1,0 +1,12 @@
+.tools/
+**/target/
+**/node_modules/
+frontend/dist/
+.env
+*.log
+artifacts/
+!artifacts/.gitkeep
+.firecrawl/
+**/test-results/
+**/playwright-report/
+**/*.tsbuildinfo

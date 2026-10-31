@@ -1,0 +1,1 @@
+CREATE TABLE notifications (event_id varchar(36) PRIMARY KEY, recipient varchar(254) NOT NULL,subject varchar(200) NOT NULL,body text NOT NULL,state varchar(20) NOT NULL DEFAULT 'PENDING',created_at timestamptz NOT NULL DEFAULT now());

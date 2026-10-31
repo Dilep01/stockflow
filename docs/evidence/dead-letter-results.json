@@ -1,0 +1,10 @@
+{
+  "passed": true,
+  "eventId": "9f243194-357a-4218-9667-2997c67ec386",
+  "checks": [
+    "invalid event reaches DLT",
+    "failed transaction does not commit inbox",
+    "repaired same-ID replay applies once",
+    "duplicate replay leaves one inbox entry"
+  ]
+}

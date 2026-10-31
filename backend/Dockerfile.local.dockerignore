@@ -1,0 +1,3 @@
+.tools
+src
+!target/stockflow-1.0.0.jar

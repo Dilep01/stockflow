@@ -1,0 +1,136 @@
+// One source for consistent local service definitions; generated compose.yaml is committed.
+const fs = require("node:fs");
+const common = `    image: stockflow-api:local
+    build: ./backend
+    restart: unless-stopped
+    mem_limit: 640m
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/actuator/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    depends_on:
+      postgres: {condition: service_healthy}
+    environment:
+      JWT_SECRET: \${JWT_SECRET:?Run scripts/setup.ps1}
+      DEMO_PASSWORD: \${DEMO_PASSWORD:?Run scripts/setup.ps1}
+      DB_PASSWORD: \${POSTGRES_PASSWORD}
+      REDIS_HOST: redis
+      MAIL_HOST: mailpit
+      KAFKA_SERVERS: kafka:9092
+`;
+let text = `name: stockflow
+services:
+  postgres:
+    image: postgres:17.6-alpine
+    environment:
+      POSTGRES_PASSWORD: \${POSTGRES_PASSWORD:?Run scripts/setup.ps1}
+    ports: ["127.0.0.1:55432:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./infra/postgres/init.sh:/docker-entrypoint-initdb.d/01-init.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+  redis:
+    image: redis:8.2.2-alpine
+    profiles: [distributed, cache]
+    command: ["redis-server", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru"]
+  kafka-init:
+    image: alpine:3.22
+    profiles: [distributed]
+    user: "0:0"
+    command: ["chown", "1000:1000", "/data"]
+    volumes: ["kafkadata:/data"]
+  kafka:
+    image: apache/kafka:4.1.0
+    profiles: [distributed]
+    depends_on:
+      kafka-init: {condition: service_completed_successfully}
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_HEAP_OPTS: -Xms256m -Xmx512m
+      KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
+    volumes: ["kafkadata:/tmp/kraft-combined-logs"]
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+  mailpit:
+    image: axllent/mailpit:v1.27.8
+    ports: ["127.0.0.1:8025:8025"]
+  backend:
+    profiles: [lite]
+${common}      APP_ROLE: all
+      DB_URL: jdbc:postgresql://postgres:5432/stockflow
+      DB_USER: sf_stockflow
+      MESSAGING: local
+`;
+for (const role of [
+  "identity",
+  "catalog",
+  "inventory",
+  "orders",
+  "fulfillment",
+  "notification",
+])
+  text += `  ${role}:
+    profiles: [distributed]
+${common.replace("postgres: {condition: service_healthy}", "postgres: {condition: service_healthy}\n      kafka: {condition: service_healthy}")}      APP_ROLE: ${role}
+      DB_URL: jdbc:postgresql://postgres:5432/${role}
+      DB_USER: sf_${role}
+      MESSAGING: kafka
+      CACHE_ENABLED: ${role === "catalog"}
+`;
+for (const [name, profile, port, deps, config] of [
+  ["web", "lite", 8088, "backend", "lite"],
+  [
+    "web-distributed",
+    "distributed",
+    8089,
+    "identity, catalog, inventory, orders, fulfillment",
+    "distributed",
+  ],
+])
+  text += `  ${name}:
+    profiles: [${profile}]
+    image: stockflow-web:local
+    build: ./frontend
+    ports: ["127.0.0.1:${port}:80"]
+    volumes: ["./infra/nginx/${config}.conf:/etc/nginx/conf.d/default.conf:ro"]
+    depends_on: [${deps}]
+`;
+text += `  prometheus:
+    image: prom/prometheus:v3.6.0
+    profiles: [monitoring]
+    ports: ["127.0.0.1:9090:9090"]
+    volumes: ["./infra/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro"]
+  grafana:
+    image: grafana/grafana:12.2.0
+    profiles: [monitoring]
+    ports: ["127.0.0.1:3001:3000"]
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: \${GRAFANA_PASSWORD}
+    volumes:
+      - ./infra/monitoring/datasource.yml:/etc/grafana/provisioning/datasources/default.yml:ro
+      - ./infra/monitoring/dashboard-provider.yml:/etc/grafana/provisioning/dashboards/default.yml:ro
+      - ./infra/monitoring/dashboard.json:/var/lib/grafana/dashboards/stockflow.json:ro
+volumes:
+  pgdata:
+  kafkadata:
+`;
+fs.writeFileSync("compose.yaml", text);

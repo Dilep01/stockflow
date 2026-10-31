@@ -1,0 +1,55 @@
+{
+  "base": "http://127.0.0.1:8089",
+  "at": "2026-10-29T03:58:51.099Z",
+  "results": [
+    {
+      "name": "checkout measurements",
+      "requests": 100,
+      "concurrency": 100,
+      "p50Ms": 14388,
+      "p95Ms": 15345,
+      "p99Ms": 15427,
+      "completionMs": 26682
+    },
+    {
+      "name": "100 competing checkouts allocate exactly 10 units",
+      "passed": true,
+      "durationMs": 26728
+    },
+    {
+      "name": "cancellation releases stock and duplicate checkout returns the same order",
+      "passed": true,
+      "durationMs": 2366
+    },
+    {
+      "name": "dispatch, delivery, return inspection, and restock converge",
+      "passed": true,
+      "durationMs": 5215
+    },
+    {
+      "name": "transfer receipt is idempotent",
+      "passed": true,
+      "durationMs": 569
+    },
+    {
+      "name": "Redis outage falls back to PostgreSQL",
+      "passed": true,
+      "durationMs": 8569
+    },
+    {
+      "name": "inventory service restart recovers queued order",
+      "passed": true,
+      "durationMs": 42256
+    },
+    {
+      "name": "Kafka outage preserves order in outbox and resumes",
+      "passed": true,
+      "durationMs": 25618
+    },
+    {
+      "name": "inventory ledger reconciles after all workflows",
+      "passed": true,
+      "durationMs": 28
+    }
+  ]
+}
